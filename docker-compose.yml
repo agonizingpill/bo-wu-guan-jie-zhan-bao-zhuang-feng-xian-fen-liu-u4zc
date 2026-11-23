@@ -1,0 +1,70 @@
+name: museum-crate-triage
+x-runtime: &runtime
+  build: ./backend
+  environment:
+    DATABASE_URL: postgresql://museum:${POSTGRES_PASSWORD:-crate-local-password}@db:5432/museum
+    REDIS_URL: redis://redis:6379/0
+    JWT_SECRET: ${JWT_SECRET:-local-museum-archive-signing-key-replace-before-deployment}
+    SEED_DEMO: ${SEED_DEMO:-true}
+  depends_on:
+    db: {condition: service_healthy}
+    redis: {condition: service_healthy}
+  volumes: [shared:/app/artifacts]
+services:
+  frontend:
+    build: ./frontend
+    container_name: ${COMPOSE_PROJECT_NAME:-museum-crate-triage}-frontend
+    ports: ['${FRONTEND_PORT:-18260}:80']
+    depends_on:
+      backend: {condition: service_healthy}
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/api/health']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  backend:
+    <<: *runtime
+    container_name: ${COMPOSE_PROJECT_NAME:-museum-crate-triage}-backend
+    ports: ['${BACKEND_PORT:-19260}:8000']
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2).read()']
+      interval: 5s
+      timeout: 3s
+      retries: 24
+  worker:
+    <<: *runtime
+    container_name: ${COMPOSE_PROJECT_NAME:-museum-crate-triage}-worker
+    command: ['python', '-m', 'src.worker']
+    healthcheck:
+      test: ['CMD', 'python', '-c', 'from pathlib import Path; import time; assert time.time() - Path("/tmp/museum-heartbeat").stat().st_mtime < 15']
+      interval: 5s
+      timeout: 3s
+      retries: 24
+  db:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-museum-crate-triage}-db
+    environment:
+      POSTGRES_DB: museum
+      POSTGRES_USER: museum
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crate-local-password}
+    ports: ['${DB_PORT:-17760}:5432']
+    volumes: [postgres:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U museum -d museum']
+      interval: 3s
+      timeout: 3s
+      retries: 12
+  redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-museum-crate-triage}-redis
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes: [redis:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 12
+volumes:
+  postgres:
+  redis:
+  shared:
