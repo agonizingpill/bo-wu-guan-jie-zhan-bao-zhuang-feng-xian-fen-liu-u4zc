@@ -3,7 +3,7 @@ from datetime import datetime
 
 from psycopg.types.json import Jsonb
 
-from src.scoring import score
+from src.scoring import THRESHOLD, score
 from src.security import hash_password
 from src.storage import audit, connection, initialize
 
@@ -22,6 +22,36 @@ LOANS = (
 
 def clock(value):
     return datetime.fromisoformat(f'2026-11-26T{value}:00+08:00')
+
+
+def seed_convoy(db):
+    if db.execute("SELECT 1 FROM convoy WHERE label='临展首日专车' LIMIT 1").fetchone():
+        return False
+    rows = db.execute('''SELECT l.id,l.accession,t.probability FROM exhibit_loan l
+                         JOIN triage_case t ON t.loan_id=l.id AND t.status='scored'
+                         WHERE l.accession IN ('BR-2611-014','BR-2611-023') ORDER BY l.id''').fetchall()
+    if len(rows) < 2:
+        return False
+    convoy = db.execute('''INSERT INTO convoy (label,vehicle,begins_at,ends_at,created_by)
+                           VALUES ('临展首日专车','沪A·藏06',%s,%s,'operator') RETURNING *''',
+                        (clock('13:45'), clock('14:25'))).fetchone()
+    audit(db, None, 'operator', 'convoy_created', convoy_id=convoy['id'], label=convoy['label'],
+          vehicle=convoy['vehicle'])
+    scores = []
+    for row in rows:
+        db.execute('INSERT INTO convoy_member (convoy_id,loan_id,added_by) VALUES (%s,%s,%s)',
+                   (convoy['id'], row['id'], 'operator'))
+        audit(db, row['id'], 'operator', 'convoy_member_added', convoy_id=convoy['id'], label=convoy['label'])
+        scores.append({'loan_id': row['id'], 'accession': row['accession'], 'probability': row['probability']})
+    combined = min(1.0, sum(item['probability'] for item in scores))
+    snapshot = [{'loan_id': item['loan_id'], 'accession': item['accession']} for item in scores]
+    db.execute('''INSERT INTO convoy_assessment (convoy_id,roster_version,roster,member_scores,combined_risk,
+                                                 threshold,assessed_by)
+                  VALUES (%s,1,%s,%s,%s,%s,'operator')''',
+               (convoy['id'], Jsonb(snapshot), Jsonb(scores), combined, THRESHOLD))
+    audit(db, None, 'operator', 'convoy_assessed', convoy_id=convoy['id'], roster_version=1,
+          combined_risk=round(combined, 6), threshold=THRESHOLD)
+    return True
 
 
 def seed():
@@ -81,7 +111,8 @@ def seed():
                            (case_id, witness, clock('09:15'), reason, clock('09:28')))
                 audit(db, loan_id, 'operator', 'unpack_witnessed', observation=witness)
                 audit(db, loan_id, 'supervisor', 'downgrade_sample_required', reason=reason)
-        return {'inserted_loans': inserted, 'total_loans': db.execute('SELECT count(*) AS n FROM exhibit_loan').fetchone()['n']}
+        return {'inserted_loans': inserted, 'convoy_seeded': seed_convoy(db),
+                'total_loans': db.execute('SELECT count(*) AS n FROM exhibit_loan').fetchone()['n']}
 
 
 if __name__ == '__main__':

@@ -2,10 +2,10 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from . import loans, reviews, transit, triage
+from . import convoys, loans, reviews, transit, triage
 from .middleware import application_errors, request_history
-from .schemas import (CrateInspection, GallerySetup, LoanIntake, Login, ReopenReview, ReviewDecision,
-                      Role, SampleObservation, StaffMember, TransitReservation, Witness)
+from .schemas import (ConvoyCreate, ConvoyMember, ConvoySign, CrateInspection, GallerySetup, LoanIntake, Login,
+                      ReopenReview, ReviewDecision, Role, SampleObservation, StaffMember, TransitReservation, Witness)
 from .security import issue_token, require, signed_in, verify_password
 from .storage import audit, connection, queue
 
@@ -130,3 +130,48 @@ def inspect_sample(loan_id: int, data: SampleObservation, staff=Depends(operator
 def reopen_review(loan_id: int, data: ReopenReview, staff=Depends(supervisor)):
     with connection() as db:
         return reviews.reopen(db, loan_id, data, staff.username)
+
+
+@app.get('/convoys')
+def list_convoys(staff=Depends(signed_in)):
+    with connection() as db:
+        return convoys.fleet(db)
+
+
+@app.post('/convoys', status_code=201)
+def create_convoy(data: ConvoyCreate, staff=Depends(operator)):
+    with connection() as db:
+        return convoys.create(db, data, staff.username)
+
+
+@app.post('/convoys/{convoy_id}/members')
+def join_convoy(convoy_id: int, data: ConvoyMember, staff=Depends(operator)):
+    with connection() as db:
+        return convoys.add_member(db, convoy_id, data, staff.username)
+
+
+@app.delete('/convoys/{convoy_id}/members/{loan_id}')
+def leave_convoy(convoy_id: int, loan_id: int, staff=Depends(operator)):
+    with connection() as db:
+        return convoys.remove_member(db, convoy_id, loan_id, staff.username)
+
+
+@app.post('/convoys/{convoy_id}/assess')
+def assess_convoy(convoy_id: int, staff=Depends(operator)):
+    with connection() as db:
+        return convoys.assess(db, convoy_id, staff.username)
+
+
+@app.post('/convoys/{convoy_id}/sign')
+def sign_convoy(convoy_id: int, data: ConvoySign, staff=Depends(supervisor)):
+    with connection() as db:
+        return convoys.sign(db, convoy_id, data, staff.username)
+
+
+@app.post('/convoys/{convoy_id}/dispatch')
+def dispatch_convoy(convoy_id: int, staff=Depends(operator)):
+    with connection() as db:
+        view, order, reasons = convoys.dispatch(db, convoy_id, staff.username)
+    if reasons:
+        return JSONResponse({'detail': '；'.join(reasons)}, 409)
+    return view

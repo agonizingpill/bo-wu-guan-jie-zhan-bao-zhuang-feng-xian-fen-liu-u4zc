@@ -7,7 +7,10 @@ from .storage import audit
 
 ARCHIVE = '''
 SELECT l.*, to_jsonb(c) AS crate, to_jsonb(w) AS transit, to_jsonb(t) AS triage,
-       to_jsonb(r) AS review
+       to_jsonb(r) AS review,
+       (SELECT jsonb_build_object('id', cv.id, 'label', cv.label) FROM convoy_member cm
+        JOIN convoy cv ON cv.id=cm.convoy_id
+        WHERE cm.loan_id=l.id AND cv.status='open') AS convoy
 FROM exhibit_loan l
 LEFT JOIN crate_check c ON c.loan_id=l.id
 LEFT JOIN transit_window w ON w.loan_id=l.id AND w.status IN ('booked','conflict','dispatched')
@@ -19,6 +22,8 @@ LEFT JOIN unpack_review r ON r.case_id=t.id
 def dispatch_issue(record):
     if record['status'] == LoanStatus.DISPATCHED:
         return '这笔借展已派车'
+    if record.get('convoy'):
+        return f"该批次已编入车次「{record['convoy']['label']}」，请随整车派车"
     if not record['crate'] or not record['crate']['seal_code']:
         return '缺少木箱封签，补录封签后才能派车'
     window = record['transit']

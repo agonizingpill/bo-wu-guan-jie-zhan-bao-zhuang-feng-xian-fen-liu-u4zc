@@ -14,8 +14,8 @@
 
 | 岗位 | 账号 | 页面和权限 |
 | --- | --- | --- |
-| 借展经办 | `operator` | 登记借展、补录包装与封签、排运输窗口、提交分流、签署开箱见证、抽检、派车 |
-| 文保主管 | `supervisor` | 登记展厅布置，签署改判或暂缓，整改后重开复核。可调阅其余档案 |
+| 借展经办 | `operator` | 登记借展、补录包装与封签、排运输窗口、提交分流、签署开箱见证、抽检、编组车次、评估与派车 |
+| 文保主管 | `supervisor` | 登记展厅布置，签署改判或暂缓，同车达线车次整车签字，整改后重开复核。可调阅其余档案 |
 | 展务阅览 | `viewer` | 只读调阅借展、排程、评分和复核档案 |
 
 三个演示账号使用密码 `MuseumDemo!26`。登录页的演示岗位按钮会代填相应凭据。
@@ -71,14 +71,16 @@ docker compose exec -T backend python -m scripts.seed_demo
 - 用种子 `2611` 生成 960 条合成检查，分层留出 25%。模型概率达到 `0.58` 生成一张开箱复核单。留出集 ROC AUC、Brier 分数、版本、参数、样本和输入 SHA-256、编码值随结果写库。概率只代表当前演示模型的分流判断。
 - PostgreSQL 保留 `queued` 状态。Redis 通知丢失时，worker 会重新推送数据库中待算的任务。计算失败保留记录并允许同一 case 重试。
 - 派车同时要求封签存在、运输窗口已确认且借展已放行。同一展厅或同一车辆的有效窗口相互排斥。高风险由经办见证、主管签字，改判低风险须留理由并抽检封签。封签不符保留失败记录，仍需重新核验。
+- 同车多箱可编成一趟车，共用运输窗口。各箱出分后把风险概率相加、封顶 100% 作为同车合计风险，达到 `0.58` 开箱线须主管按当前名单签字。增减借品即撤销整车签字，名单版本递增，晚到的旧名单评估记录不得抵用。各箱照常核准，入组后只能随整车派车；派车签发的车单锁定签发时核准的名单，重试不会重复开车单。排程页面可编组、签字并查看拦车原因。
 
 ## 共享枚举
 
 | 枚举 | 后端 | 前端 |
 | --- | --- | --- |
 | 岗位 | `migrations/001_archive.sql`、`schemas.py`、`security.py`、`app.py`、`scripts/seed_demo.py` | `constants.js`、`app.js` 和四个 `pages/` 模块 |
-| 借展状态 | SQL 约束、`schemas.py`、`loans.py`、`transit.py`、`triage.py`、`reviews.py`、`worker.py`、seed | `constants.js`、`components.js`、`pages/archive.js`、`pages/transit.js` |
+| 借展状态 | SQL 约束、`schemas.py`、`loans.py`、`transit.py`、`triage.py`、`reviews.py`、`convoys.py`、`worker.py`、seed | `constants.js`、`components.js`、`pages/archive.js`、`pages/transit.js` |
 | 开箱状态 | SQL 约束、`schemas.py`、`reviews.py`、`loans.py`、`worker.py`、seed | `constants.js`、`pages/review.js`、`pages/archive.js` |
+| 车次状态 | SQL 约束、`schemas.py`、`convoys.py`、seed | `constants.js`、`pages/transit.js` |
 | 材质、包装、路线 | SQL 约束、`schemas.py`、`scoring.py`、seed | `constants.js`、`pages/archive.js`、`pages/triage.js` |
 
 许可证见 [MIT License](LICENSE)。

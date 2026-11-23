@@ -29,6 +29,11 @@ class ReviewStatus(StrEnum):
     CLEARED = 'cleared'
 
 
+class ConvoyStatus(StrEnum):
+    OPEN = 'open'
+    DISPATCHED = 'dispatched'
+
+
 class Material(StrEnum):
     PORCELAIN = 'porcelain'
     PAPER = 'paper'
@@ -115,4 +120,17 @@ class SampleObservation(BaseModel):
 
 
 class ReopenReview(BaseModel):
+    reason: Reason
+
+
+class ConvoyCreate(Interval):
+    label: Label
+    vehicle: Label
+
+
+class ConvoyMember(BaseModel):
+    loan_id: int = Field(gt=0)
+
+
+class ConvoySign(BaseModel):
     reason: Reason

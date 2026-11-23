@@ -114,6 +114,29 @@ textarea { min-height: 80px; resize: vertical; }
 .legend span:nth-child(3)::before { background: var(--rust); border-color: var(--rust); }
 .dispatch-panel { border-top: 1px solid var(--rule); margin-top: 22px; padding-top: 13px; }
 .dispatch-panel > p { margin-top: 7px; }
+.convoy-board { border-top: 1px solid var(--rule); margin-top: 22px; padding-top: 13px; }
+.convoy-note { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.convoy-card { border: 1px solid var(--rule); border-left: 3px solid var(--rust); background: var(--linen); padding: 14px 16px; margin-top: 14px; }
+.convoy-card[data-state='dispatched'] { border-left-color: var(--pine); }
+.convoy-card > header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.convoy-card > header strong { font: 700 16px var(--serif); }
+.convoy-card > header .mono { color: var(--rust); }
+.convoy-card > header small { margin-left: auto; }
+.convoy-risk .probability { font-size: clamp(28px, 3.4vw, 44px); margin-block: 8px 6px; }
+.convoy-risk > p { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.convoy-members { list-style: none; padding: 0; margin: 12px 0 0; }
+.convoy-members li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px dotted var(--rule); }
+.convoy-members li small { display: block; }
+.convoy-members li form { margin: 0; }
+.convoy-join { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; margin-top: 10px; }
+.convoy-join .form-actions { margin-top: 0; }
+.convoy-actions { justify-content: flex-start; }
+.hold-reasons { background: var(--rust-pale); border-left: 3px solid var(--rust); padding: 9px 12px; margin-top: 12px; }
+.hold-reasons h4 { margin: 0 0 4px; font: 700 13px var(--serif); color: var(--rust); }
+.hold-reasons ul { margin: 0; padding-left: 18px; color: var(--rust); font-size: 13px; }
+.dispatch-order { background: var(--pine-pale); border-left: 3px solid var(--pine); padding: 9px 12px; margin-top: 12px; font-size: 13px; }
+.dispatch-order h4 { margin: 0 0 4px; font: 700 13px var(--serif); color: var(--pine); }
+.success-line small { display: block; margin-top: 3px; }
 .transit-fields { grid-template-columns: 1fr 1.15fr 1.15fr; }
 .scoring-sheet { display: grid; grid-template-columns: 1.1fr .9fr; gap: 18px; }
 .scoring-slip { background: var(--linen); border-left: 3px solid var(--rust); padding: 16px 18px; }

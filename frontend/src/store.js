@@ -1,6 +1,6 @@
 export const store = {
   token: sessionStorage.getItem('museum-token'), staff: null,
-  loans: [], record: null, schedule: [], scheduleDay: '',
+  loans: [], record: null, schedule: [], scheduleDay: '', convoys: [],
 };
 
 export function saveSession(session) {

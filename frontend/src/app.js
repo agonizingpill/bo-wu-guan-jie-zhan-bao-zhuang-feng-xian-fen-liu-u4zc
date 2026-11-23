@@ -58,12 +58,13 @@ async function render() {
   if (!store.staff) { loginPage(); return; }
   const {page, id} = currentRoute();
   try {
-    const [loans, schedule] = await Promise.all([authed('/loans'), page === 'transit' ? authed('/schedule') : []]);
+    const [loans, schedule, convoys] = await Promise.all([authed('/loans'),
+      page === 'transit' ? authed('/schedule') : [], page === 'transit' ? authed('/convoys') : []]);
     if (ticket !== generation) return;
     const selected = loans.find((item) => item.id === id) ?? loans.find((item) => item.review) ?? loans[0];
     const record = selected ? await authed(`/loans/${selected.id}`) : null;
     if (ticket !== generation) return;
-    Object.assign(store, {loans, record, schedule});
+    Object.assign(store, {loans, record, schedule, convoys});
     shell(page, renderers[page](store));
     if (record?.triage?.status === 'queued' && page === 'triage') poll = setTimeout(render, 1600);
   } catch (err) {
@@ -73,7 +74,7 @@ async function render() {
   }
 }
 
-function target(action, fields) {
+function target(action, fields, form) {
   const base = `/loans/${store.record?.id}`;
   if (action === 'intake') return ['/loans', {...fields, must_arrive: fromLocal(fields.must_arrive)}];
   if (action === 'crate') {
@@ -86,12 +87,22 @@ function target(action, fields) {
     return [action === 'setup' ? '/schedule/setup' : `${base}/transit`,
       {...fields, begins_at: fromLocal(fields.begins_at), ends_at: fromLocal(fields.ends_at)}];
   }
+  if (action === 'convoy-create') {
+    return ['/convoys', {...fields, begins_at: fromLocal(fields.begins_at), ends_at: fromLocal(fields.ends_at)}];
+  }
+  if (action === 'convoy-add') return [`/convoys/${form.dataset.convoy}/members`, {loan_id: Number(fields.loan_id)}];
+  if (action === 'convoy-remove') return [`/convoys/${form.dataset.convoy}/members/${fields.loan_id}`, undefined, 'DELETE'];
+  if (action === 'convoy-assess') return [`/convoys/${form.dataset.convoy}/assess`];
+  if (action === 'convoy-sign') return [`/convoys/${form.dataset.convoy}/sign`, fields];
   if (action === 'triage') return [`${base}/triage`];
   return [`${base}/review/${action}`, fields];
 }
 
 const confirmations = {intake: '已建立借展档案', crate: '已保存检查记录', setup: '已登记展厅布置',
-  triage: '已提交风险分流', witness: '已签署开箱见证', decision: '已记录主管决定', sample: '封签抽检通过', reopen: '已重开复核'};
+  triage: '已提交风险分流', witness: '已签署开箱见证', decision: '已记录主管决定', sample: '封签抽检通过', reopen: '已重开复核',
+  'convoy-create': '已建立车次，可编入借品', 'convoy-add': '借品已入组，名单版本已更新',
+  'convoy-remove': '借品已移出，名单版本已更新', 'convoy-assess': '已按当前名单评估同车合计风险',
+  'convoy-sign': '整车签字已记录'};
 
 app.addEventListener('submit', async (event) => {
   const form = event.target;
@@ -106,10 +117,10 @@ app.addEventListener('submit', async (event) => {
       saveSession(await api('/auth/login', {method: 'POST', data: fields}));
       history.replaceState(null, '', '#archive');
     } else {
-      const [path, data, method = 'POST'] = target(action, fields);
+      const [path, data, method = 'POST'] = target(action, fields, form);
       const response = await authed(path, {data, method});
       if (action === 'intake') history.replaceState(null, '', `#archive/${response.id}`);
-      if (action === 'setup' || action === 'transit') store.scheduleDay = fields.begins_at.slice(0, 10);
+      if (action === 'setup' || action === 'transit' || action === 'convoy-create') store.scheduleDay = fields.begins_at.slice(0, 10);
       const conflict = action === 'transit' && response.transit?.status === 'conflict';
       tell(action === 'transit' ? (conflict ? response.transit.conflict_reason : '运输窗口已确认') : confirmations[action], conflict);
       form.closest('dialog')?.close();
@@ -143,6 +154,15 @@ app.addEventListener('click', async (event) => {
     try {
       await authed(`/loans/${store.record.id}/dispatch`, {method: 'POST'});
       tell('派车已确认，借展档案已封存');
+      await render();
+    } catch (err) { tell(err.message, true); }
+    finally { button.disabled = false; }
+  }
+  if (button.dataset.convoyDispatch) {
+    button.disabled = true;
+    try {
+      await authed(`/convoys/${button.dataset.convoyDispatch}/dispatch`, {method: 'POST'});
+      tell('整车派车已确认，车单已签发');
       await render();
     } catch (err) { tell(err.message, true); }
     finally { button.disabled = false; }
